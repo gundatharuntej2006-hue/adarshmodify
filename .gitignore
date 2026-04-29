@@ -24,6 +24,7 @@ uba_logs.db-journal
 .env
 .env.local
 .env.*.local
+frontend/.env
 
 # Node / frontend
 node_modules/

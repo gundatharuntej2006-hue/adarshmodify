@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { generateReport, type ThreatResponse } from '../../api/threatApi';
+import { EmailReportModal } from './EmailReportModal';
 
 interface IncidentReportProps {
   result: ThreatResponse;
@@ -51,6 +52,7 @@ export function IncidentReport({ result }: IncidentReportProps) {
         {loading ? <span className="animate-spin">⟳</span> : '📄'}
         {loading ? 'GENERATING...' : 'GENERATE REPORT'}
       </button>
+      {report && <EmailReportModal reportText={report} threatLevel={result.threat} />}
 
       {/* Modal */}
       {showModal && report && (

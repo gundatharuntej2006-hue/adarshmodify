@@ -21,6 +21,7 @@ import { AriaChatbot } from './components/AriaChatbot';
 import { useThreatPredict } from '../hooks/useThreatPredict';
 import { useAudioAlert } from '../hooks/useAudioAlert';
 import { useThreatLevel } from './context/ThreatLevelContext';
+import { LiveThreatFeed } from './components/LiveThreatFeed';
 
 type ThreatLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 type TabMode = 'single' | 'batch' | 'uba';
@@ -228,6 +229,9 @@ export default function App() {
                 </div>
               </div>
             </div>
+
+            {/* Live Threat Feed */}
+            <LiveThreatFeed />
 
             {/* Prediction History */}
             <PredictionHistory entries={history} onClear={() => setHistory([])} />

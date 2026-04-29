@@ -11,6 +11,8 @@ import joblib
 from flask import Flask
 from flask_cors import CORS
 
+from backend.live_feed import socketio, background_thread
+
 # Importing config first runs load_dotenv() and configures logging.
 from backend import state
 from backend.config import (
@@ -70,5 +72,11 @@ def create_app():
     app.register_blueprint(reports_bp)
     app.register_blueprint(aria_bp)
     app.register_blueprint(meta_bp)
+
+    from backend.routes.email_report import bp as email_report_bp
+    app.register_blueprint(email_report_bp)
+
+    socketio.init_app(app)
+    socketio.start_background_task(background_thread)
 
     return app
