@@ -8,7 +8,12 @@ from flask import Blueprint, current_app, jsonify, request
 from backend import state
 from backend.constants import FEATURES
 from backend.models.inference import check_anomaly, compute_shap_values, compute_shap_xai
+import random
+import time
+from threading import Thread
+
 from backend.services.geo import geolocate_attack
+from backend.live_feed import socketio
 
 logger = logging.getLogger("soc.predict")
 
@@ -63,6 +68,32 @@ def predict():
         geo = geolocate_attack(response.get("attack_type", "Normal"))
         if geo:
             response["location"] = geo
+
+        def simulate_attacks(base_response):
+            time.sleep(1)
+            num_attacks = random.randint(5, 10)
+            for _ in range(num_attacks):
+                time.sleep(0.5)
+                conf_variance = random.uniform(-5, 5)
+                new_conf = max(0.0, min(100.0, base_response.get("confidence", 0) + conf_variance))
+                
+                simulated_event = {
+                    "threat": base_response.get("threat", "LOW"),
+                    "attack_type": base_response.get("attack_type", "Normal"),
+                    "confidence": new_conf,
+                    "location": {
+                        "lat": random.uniform(-60, 60),
+                        "lng": random.uniform(-180, 180),
+                        "country": "Simulated",
+                        "city": "Unknown"
+                    },
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+                    "is_anomalous": base_response.get("is_anomalous", False),
+                    "anomaly_score": base_response.get("anomaly_score", 0.0)
+                }
+                socketio.emit("live_threat", simulated_event)
+                
+        Thread(target=simulate_attacks, args=(response,)).start()
 
         return current_app.response_class(json.dumps(response), mimetype="application/json")
     except Exception as e:

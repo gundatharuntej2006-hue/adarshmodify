@@ -22,6 +22,7 @@ import { useThreatPredict } from '../hooks/useThreatPredict';
 import { useAudioAlert } from '../hooks/useAudioAlert';
 import { useThreatLevel } from './context/ThreatLevelContext';
 import { LiveThreatFeed } from './components/LiveThreatFeed';
+import { toast } from 'sonner';
 
 type ThreatLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 type TabMode = 'single' | 'batch' | 'uba';
@@ -102,6 +103,12 @@ export default function App() {
       ctx.setAttackType(res.attack_type ?? null);
       ctx.setIsZeroDay((res.is_anomalous ?? false) && res.attack_type === 'Normal');
       addToHistory(res, data);
+      
+      toast.info('Simulating attack pattern...', { duration: 4000 });
+      setTimeout(() => {
+        toast.success('Simulation complete');
+      }, 5000);
+
       await predict(data);
     } catch (e) {
       await predict(data);
