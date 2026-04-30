@@ -10,13 +10,14 @@ interface ControlPanelProps {
 
 export type { ThreatInput as PredictionInput };
 
-const PROTO_MAP: Record<string, number> = { TCP: 2, UDP: 1, ICMP: 0 };
-const SVC_MAP: Record<string, number> = { HTTP: 10, FTP: 4, SMTP: 18, SSH: 20, DNS: 3, Other: 0 };
-const FLAG_MAP: Record<string, number> = { 'SF (Normal)': 5, 'S0': 4, 'REJ': 3, 'RSTO': 2, 'SH': 1 };
+// Correct integer encoding to match trainer's LabelEncoder (alphabetical sort on NSL-KDD)
+const PROTO_MAP: Record<string, number> = { TCP: 1, UDP: 2, ICMP: 0 };
+const SVC_MAP: Record<string, number> = { HTTP: 21, FTP: 16, SMTP: 52, SSH: 54, DNS: 9, Other: 42 };
+const FLAG_MAP: Record<string, number> = { 'SF (Normal)': 9, 'S0': 5, 'REJ': 1, 'RSTO': 2, 'SH': 10 };
 
-export const PROTO_REV: Record<number, string> = { 2: 'TCP', 1: 'UDP', 0: 'ICMP' };
-export const SVC_REV: Record<number, string> = { 10: 'HTTP', 4: 'FTP', 18: 'SMTP', 20: 'SSH', 3: 'DNS', 0: 'Other' };
-export const FLAG_REV: Record<number, string> = { 5: 'SF', 4: 'S0', 3: 'REJ', 2: 'RSTO', 1: 'SH', 0: 'Other' };
+export const PROTO_REV: Record<number, string> = { 1: 'TCP', 2: 'UDP', 0: 'ICMP' };
+export const SVC_REV: Record<number, string> = { 21: 'HTTP', 16: 'FTP', 52: 'SMTP', 54: 'SSH', 9: 'DNS', 42: 'Other' };
+export const FLAG_REV: Record<number, string> = { 9: 'SF', 5: 'S0', 1: 'REJ', 2: 'RSTO', 10: 'SH', 0: 'Other' };
 
 export function ControlPanel({ onPredict, loading, confidenceThreshold, onThresholdChange }: ControlPanelProps) {
   const [protocol, setProtocol]         = useState('TCP');
@@ -28,36 +29,53 @@ export function ControlPanel({ onPredict, loading, confidenceThreshold, onThresh
   const [failedLogins, setFailedLogins] = useState(0);
   const [loggedIn, setLoggedIn]         = useState(0);
   const [rootShell, setRootShell]       = useState(0);
-  const [rerrorRate, setRerrorRate]     = useState(0);
+  const [serrorRate, setSerrorRate]     = useState(0);
   const [count, setCount]               = useState(1);
   const [srvCount, setSrvCount]         = useState(1);
   const [dstHostCount, setDstHostCount] = useState(1);
 
   const handlePredict = () => {
+    const sameServiceRate = count > 0 ? Math.min(srvCount / count, 1) : 1;
+    const diffServiceRate = 1 - sameServiceRate;
+    const currentFlag = FLAG_MAP[flag];
+    // S0=5 in corrected encoding → force serror_rate high
+    const effectiveSerrorRate = currentFlag === 5 ? Math.max(serrorRate, 0.9) : serrorRate;
+
     const input: ThreatInput = {
       duration,
       protocol_type: PROTO_MAP[protocol],
       service: SVC_MAP[service],
-      flag: FLAG_MAP[flag],
+      flag: currentFlag,
       src_bytes: srcBytes,
       dst_bytes: dstBytes,
-      land: 0, wrong_fragment: 0, urgent: 0, hot: 0,
+      land: 0, wrong_fragment: 0, urgent: 0, hot: rootShell > 0 ? 4 : 0,
       num_failed_logins: failedLogins,
       logged_in: loggedIn,
-      num_compromised: 0,
+      num_compromised: failedLogins > 3 ? failedLogins : 0,
       root_shell: rootShell,
-      su_attempted: 0, num_root: 0, num_file_creations: 0,
-      num_shells: 0, num_access_files: 0, num_outbound_cmds: 0,
+      su_attempted: rootShell > 0 ? 1 : 0,
+      num_root: rootShell > 0 ? 1 : 0,
+      num_file_creations: 0,
+      num_shells: rootShell > 0 ? 1 : 0,
+      num_access_files: 0, num_outbound_cmds: 0,
       is_host_login: 0, is_guest_login: 0,
       count, srv_count: srvCount,
-      serror_rate: 0, srv_serror_rate: 0,
-      rerror_rate: rerrorRate, srv_rerror_rate: rerrorRate,
-      same_srv_rate: 1, diff_srv_rate: 0, srv_diff_host_rate: 0,
-      dst_host_count: dstHostCount, dst_host_srv_count: dstHostCount,
-      dst_host_same_srv_rate: 1, dst_host_diff_srv_rate: 0,
-      dst_host_same_src_port_rate: 1, dst_host_srv_diff_host_rate: 0,
-      dst_host_serror_rate: 0, dst_host_srv_serror_rate: 0,
-      dst_host_rerror_rate: rerrorRate, dst_host_srv_rerror_rate: rerrorRate,
+      serror_rate: effectiveSerrorRate,
+      srv_serror_rate: effectiveSerrorRate,
+      rerror_rate: 0, srv_rerror_rate: 0,
+      same_srv_rate: sameServiceRate,
+      diff_srv_rate: diffServiceRate,
+      srv_diff_host_rate: diffServiceRate * 0.5,
+      dst_host_count: dstHostCount,
+      dst_host_srv_count: Math.min(dstHostCount, srvCount),
+      dst_host_same_srv_rate: sameServiceRate,
+      dst_host_diff_srv_rate: diffServiceRate,
+      dst_host_same_src_port_rate: sameServiceRate,
+      dst_host_srv_diff_host_rate: diffServiceRate * 0.3,
+      dst_host_serror_rate: effectiveSerrorRate,
+      dst_host_srv_serror_rate: effectiveSerrorRate,
+      dst_host_rerror_rate: 0,
+      dst_host_srv_rerror_rate: 0,
     };
     onPredict(input);
   };
@@ -103,8 +121,8 @@ export function ControlPanel({ onPredict, loading, confidenceThreshold, onThresh
           <div><label className={lbl}>SRV COUNT</label>
             <input type="number" min={0} value={srvCount} onChange={e => setSrvCount(Number(e.target.value))} className={sel} /></div>
         </div>
-        <div><label className={lbl}>ERROR RATE: {rerrorRate.toFixed(1)}</label>
-          <input type="range" min={0} max={1} step={0.1} value={rerrorRate} onChange={e => setRerrorRate(Number(e.target.value))} className="w-full accent-cyan-400" /></div>
+        <div><label className={lbl}>ERROR RATE (SYN/Flood): {serrorRate.toFixed(1)}</label>
+          <input type="range" min={0} max={1} step={0.1} value={serrorRate} onChange={e => setSerrorRate(Number(e.target.value))} className="w-full accent-cyan-400" /></div>
         <div><label className={lbl}>DST HOST COUNT</label>
           <input type="number" min={0} value={dstHostCount} onChange={e => setDstHostCount(Number(e.target.value))} className={sel} /></div>
 
@@ -114,9 +132,7 @@ export function ControlPanel({ onPredict, loading, confidenceThreshold, onThresh
             CONFIDENCE THRESHOLD: <span className="text-cyan-400">{confidenceThreshold}%</span>
           </label>
           <input
-            type="range"
-            min={30}
-            max={99}
+            type="range" min={30} max={99}
             value={confidenceThreshold}
             onChange={e => onThresholdChange(Number(e.target.value))}
             className="w-full accent-yellow-400"

@@ -32,3 +32,11 @@ SAMPLE_CONNECTIONS = None
 
 # ── ARIA chatbot — per-session conversation history ────────────────────────
 ARIA_CONVERSATIONS = {}
+
+# ── NEW 13-feature model (network_threat_dataset.xlsx) ─────────────────
+NEW_MODEL = None
+NEW_SCALER = None
+NEW_THREAT_LE = None
+NEW_ENCODERS = None
+NEW_ISOLATION = None
+NEW_FEATURES = None

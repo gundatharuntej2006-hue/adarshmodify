@@ -6,6 +6,7 @@ interface ThreatLevelDisplayProps {
   level: 'LOW' | 'MEDIUM' | 'HIGH';
   result: ThreatResponse | null;
   confidenceThreshold: number;
+  submittedInput?: Record<string, any> | null;
 }
 
 const ATTACK_COLORS: Record<string, string> = {
@@ -40,11 +41,23 @@ const ATTACK_DESCRIPTIONS: Record<string, string> = {
   U2R:    'User to Root — privilege escalation attempt',
 };
 
-export function ThreatLevelDisplay({ level, result, confidenceThreshold }: ThreatLevelDisplayProps) {
+const ATTACK_ICONS: Record<string, string> = {
+  Normal: '✓',
+  DoS:    '⚡',
+  Probe:  '⬡',
+  R2L:    '🔑',
+  U2R:    '☠',
+};
+
+// Reverse maps for displaying input summary
+const PROTO_LABELS: Record<number, string> = { 0: 'ICMP', 1: 'TCP', 2: 'UDP' };
+const FLAG_LABELS: Record<number, string> = { 0: 'OTH', 1: 'REJ', 2: 'RSTO', 5: 'S0', 9: 'SF', 10: 'SH' };
+
+export function ThreatLevelDisplay({ level, result, confidenceThreshold, submittedInput }: ThreatLevelDisplayProps) {
   const cfg = {
     LOW:    { border: 'border-green-500',  glow: 'shadow-[0_0_20px_rgba(34,197,94,0.5)]',   text: 'text-green-400',  bg: 'bg-green-500/10',  label: 'ALL CLEAR', icon: '✓' },
-    MEDIUM: { border: 'border-yellow-500', glow: 'shadow-[0_0_20px_rgba(234,179,8,0.5)]',   text: 'text-yellow-400', bg: 'bg-yellow-500/10', label: 'MONITOR',   icon: '◈' },
-    HIGH:   { border: 'border-red-500 animate-pulse', glow: 'shadow-[0_0_30px_rgba(239,68,68,0.8)] animate-pulse', text: 'text-red-400 animate-pulse', bg: 'bg-red-500/20', label: 'ALERT', icon: '⚠' },
+    MEDIUM: { border: 'border-yellow-500', glow: 'shadow-[0_0_20px_rgba(234,179,8,0.5)]',   text: 'text-yellow-400', bg: 'bg-yellow-500/10', label: 'MONITOR CLOSELY', icon: '◈' },
+    HIGH:   { border: 'border-red-500 animate-pulse', glow: 'shadow-[0_0_30px_rgba(239,68,68,0.8)] animate-pulse', text: 'text-red-400 animate-pulse', bg: 'bg-red-500/20', label: 'THREAT DETECTED', icon: '⚠' },
   }[level];
 
   const attackType = result?.attack_type ?? null;
@@ -78,7 +91,7 @@ export function ThreatLevelDisplay({ level, result, confidenceThreshold }: Threa
           <div className="mt-4 space-y-3">
             <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg border ${ATTACK_BG[attackType] || 'bg-gray-500/20 border-gray-500/40'}`}>
               <span className={`text-lg font-bold font-mono tracking-wider ${ATTACK_COLORS[attackType] || 'text-gray-400'}`}>
-                {attackType === 'Normal' ? '✓ NORMAL TRAFFIC' : `⚠ ${attackType.toUpperCase()} ATTACK DETECTED`}
+                {ATTACK_ICONS[attackType] || '?'} {attackType === 'Normal' ? 'NORMAL TRAFFIC' : `${attackType.toUpperCase()} ATTACK DETECTED`}
               </span>
             </div>
             <div className="text-xs text-gray-500 font-mono">
@@ -87,8 +100,8 @@ export function ThreatLevelDisplay({ level, result, confidenceThreshold }: Threa
           </div>
         )}
 
-        {/* Zero-Day Badge */}
-        {result && (
+        {/* Zero-Day Badge — only when anomaly is real AND not clearly normal */}
+        {result && !(result.attack_type === 'Normal' && result.confidence > 75) && (
           <ZeroDayBadge
             isAnomalous={result.is_anomalous ?? false}
             attackType={result.attack_type ?? 'Normal'}
@@ -112,6 +125,10 @@ export function ThreatLevelDisplay({ level, result, confidenceThreshold }: Threa
                     />
                   </div>
                   <span className="text-xs font-mono text-gray-400 w-12">{val.toFixed(1)}%</span>
+                  {/* Flag dangerous runners-up */}
+                  {['U2R', 'R2L'].includes(cat) && val > 10 && cat !== attackType && (
+                    <span className="text-[9px] font-mono text-yellow-400 ml-1">⚠ ELEVATED</span>
+                  )}
                 </div>
               );
             })}
@@ -143,6 +160,27 @@ export function ThreatLevelDisplay({ level, result, confidenceThreshold }: Threa
           <div className={`w-16 h-2 rounded-full ${level === 'MEDIUM' ? 'bg-yellow-500' : 'bg-gray-700'}`} />
           <div className={`w-16 h-2 rounded-full ${level === 'HIGH' ? 'bg-red-500 animate-pulse' : 'bg-gray-700'}`} />
         </div>
+
+        {/* Analyzed Parameters Summary */}
+        {result && submittedInput && (
+          <div className="mt-4 rounded-lg p-3 text-left" style={{ background: 'rgba(255,255,255,0.03)' }}>
+            <div className="text-[10px] text-gray-500 font-mono tracking-widest mb-2">ANALYZED PARAMETERS</div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] font-mono text-gray-500">
+              <span>Protocol: <b className="text-white">{PROTO_LABELS[submittedInput.protocol_type as number] ?? '?'}</b></span>
+              <span>Flag: <b className="text-white">{FLAG_LABELS[submittedInput.flag as number] ?? '?'}</b></span>
+              <span>SRC Bytes: <b className="text-white">{Number(submittedInput.src_bytes ?? 0).toLocaleString()}</b></span>
+              <span>DST Bytes: <b className="text-white">{Number(submittedInput.dst_bytes ?? 0).toLocaleString()}</b></span>
+              <span>Failed Logins: <b style={{ color: Number(submittedInput.num_failed_logins ?? 0) >= 5 ? '#E24B4A' : '#fff' }}>
+                {submittedInput.num_failed_logins ?? 0}
+              </b></span>
+              <span>Root Shell: <b style={{ color: Number(submittedInput.root_shell ?? 0) >= 1 ? '#FF0055' : '#fff' }}>
+                {Number(submittedInput.root_shell ?? 0) >= 1 ? 'YES' : 'NO'}
+              </b></span>
+              <span>Count: <b className="text-white">{submittedInput.count ?? 0}</b></span>
+              <span>Error Rate: <b className="text-white">{Number(submittedInput.serror_rate ?? 0).toFixed(1)}</b></span>
+            </div>
+          </div>
+        )}
 
         {/* Generate Report button */}
         {result && (

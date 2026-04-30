@@ -39,10 +39,7 @@ R2L_ATTACKS = {
 }
 U2R_ATTACKS = {"buffer_overflow", "rootkit", "loadmodule", "perl", "sqlattack", "xterm", "ps"}
 
-HIGH_THREAT_LABELS = {
-    "neptune", "smurf", "pod", "teardrop", "land", "back",
-    "apache2", "udpstorm", "processtable", "mailbomb",
-}
+HIGH_THREAT_LABELS = DOS_ATTACKS | R2L_ATTACKS | U2R_ATTACKS
 
 
 def map_attack_category(label):
@@ -63,8 +60,11 @@ def map_attack_category(label):
 
 def map_threat(label):
     """Map an NSL-KDD raw label to a threat level: LOW, MEDIUM, HIGH."""
-    if label == "normal":
+    label_lower = label.strip().lower()
+    if label_lower == "normal":
         return "LOW"
-    if label in HIGH_THREAT_LABELS:
+    if label_lower in DOS_ATTACKS or label_lower in R2L_ATTACKS or label_lower in U2R_ATTACKS:
         return "HIGH"
-    return "MEDIUM"
+    if label_lower in PROBE_ATTACKS:
+        return "MEDIUM"
+    return "HIGH"  # unknown non-normal traffic is treated as HIGH

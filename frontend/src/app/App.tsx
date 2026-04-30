@@ -21,7 +21,6 @@ import { AriaChatbot } from './components/AriaChatbot';
 import { useThreatPredict } from '../hooks/useThreatPredict';
 import { useAudioAlert } from '../hooks/useAudioAlert';
 import { useThreatLevel } from './context/ThreatLevelContext';
-import { LiveThreatFeed } from './components/LiveThreatFeed';
 import { toast } from 'sonner';
 
 type ThreatLevel = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -93,8 +92,10 @@ export default function App() {
 
   // Predict that also records history
   const lastInputRef = useRef<ThreatInput | null>(null);
+  const [submittedInput, setSubmittedInput] = useState<ThreatInput | null>(null);
   const predictAndRecord = async (data: ThreatInput) => {
     lastInputRef.current = data;
+    setSubmittedInput(data);
     try {
       const res = await predictThreat(data);
       setThreatLevel(res.threat);
@@ -103,15 +104,8 @@ export default function App() {
       ctx.setAttackType(res.attack_type ?? null);
       ctx.setIsZeroDay((res.is_anomalous ?? false) && res.attack_type === 'Normal');
       addToHistory(res, data);
-      
-      toast.info('Simulating attack pattern...', { duration: 4000 });
-      setTimeout(() => {
-        toast.success('Simulation complete');
-      }, 5000);
-
-      await predict(data);
     } catch (e) {
-      await predict(data);
+      console.error('Prediction error:', e);
     }
   };
 
@@ -206,7 +200,7 @@ export default function App() {
               {/* Center */}
               <div className={`space-y-6 ${socMode ? '' : 'lg:col-span-6'}`}>
                 <div className="flex justify-center">
-                  <ThreatLevelDisplay level={threatLevel} result={result} confidenceThreshold={ctx.confidenceThreshold} />
+                  <ThreatLevelDisplay level={threatLevel} result={result} confidenceThreshold={ctx.confidenceThreshold} submittedInput={submittedInput} />
                 </div>
                 <AnalyticsPanel threatProbability={threatProbability} result={result} loading={loading} />
                 <AttackWorldMap lastResult={result} />
@@ -237,8 +231,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Live Threat Feed */}
-            <LiveThreatFeed />
 
             {/* Prediction History */}
             <PredictionHistory entries={history} onClear={() => setHistory([])} />
